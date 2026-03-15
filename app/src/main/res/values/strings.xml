@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">AudioEngine</string>
+    <string name="select_audio">Select Audio</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="apply_filter">Apply Filter</string>
+    <string name="visualizer_label">Visualizer Data (FFT Peak / RMS):</string>
+</resources>
