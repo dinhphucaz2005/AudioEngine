@@ -5,4 +5,12 @@
     <string name="pause">Pause</string>
     <string name="apply_filter">Apply Filter</string>
     <string name="visualizer_label">Visualizer Data (FFT Peak / RMS):</string>
+    <string name="playlist">Playlist</string>
+    <string name="audio_permission_required">Allow audio permission to load songs from device.</string>
+    <string name="grant_audio_permission">Grant Audio Permission</string>
+    <string name="playlist_empty">No songs found on this device.</string>
+    <string name="unknown_title">Unknown title</string>
+    <string name="unknown_artist">Unknown artist</string>
+    <string name="song_thumbnail">Song thumbnail</string>
+    <string name="thumbnail_placeholder">No cover</string>
 </resources>
