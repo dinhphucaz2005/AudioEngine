@@ -17,6 +17,24 @@
     <string name="playlist_empty">No songs found on this device.</string>
     <string name="unknown_title">Unknown title</string>
     <string name="unknown_artist">Unknown artist</string>
+    <string name="unknown_album">Unknown album</string>
+    <string name="song_details_title">Song details</string>
+    <string name="meta_title">Title</string>
+    <string name="meta_artist">Artist</string>
+    <string name="meta_album">Album</string>
+    <string name="meta_duration">Duration</string>
+    <string name="meta_track">Track</string>
+    <string name="meta_year">Year</string>
+    <string name="meta_genre">Genre</string>
+    <string name="meta_album_artist">Album artist</string>
+    <string name="meta_composer">Composer</string>
+    <string name="meta_author">Author</string>
+    <string name="meta_writer">Writer</string>
+    <string name="meta_mime_type">MIME type</string>
+    <string name="meta_bitrate">Bitrate</string>
+    <string name="meta_sample_rate">Sample rate</string>
+    <string name="meta_bits_per_sample">Bits per sample</string>
+    <string name="meta_channels">Channels</string>
     <string name="song_thumbnail">Song thumbnail</string>
     <string name="thumbnail_placeholder">No cover</string>
 </resources>
