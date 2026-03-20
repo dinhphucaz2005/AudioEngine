@@ -41,6 +41,15 @@ class AudioEngine {
 
     private external fun nativeVisualizerOnDrawFrame(nativeHandle: Long = this.nativeHandle)
 
+    private external fun nativeVisualizerSetTouch(
+        xNorm: Float,
+        yNorm: Float,
+        isDownInt: Int,
+        pressure: Float,
+        radiusNorm: Float,
+        nativeHandle: Long,
+    )
+
     private external fun nativeSetFilterType(
         filterType: Int,
         nativeHandle: Long = this.nativeHandle,
@@ -151,6 +160,25 @@ class AudioEngine {
 
     fun visualizerOnDrawFrame() {
         safeNativeCall { nativeVisualizerOnDrawFrame() }
+    }
+
+    fun visualizerSetTouch(
+        xNorm: Float,
+        yNorm: Float,
+        isDown: Boolean,
+        pressure: Float,
+        radiusNorm: Float,
+    ) {
+        safeNativeCall {
+            nativeVisualizerSetTouch(
+                xNorm = xNorm,
+                yNorm = yNorm,
+                isDownInt = if (isDown) 1 else 0,
+                pressure = pressure,
+                radiusNorm = radiusNorm,
+                nativeHandle = nativeHandle,
+            )
+        }
     }
 
     enum class FilterType(val value: Int) {

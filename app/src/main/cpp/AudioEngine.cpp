@@ -195,3 +195,9 @@ void AudioEngine::setAudioFilter(FilterType type) {
 
     std::atomic_store(&mAudioFilter, newFilter);
 }
+
+void AudioEngine::setVisualizerTouch(float xNorm, float yNorm, bool isDown, float pressure, float radiusNorm) {
+    if (mAudioVisualizer) {
+        mAudioVisualizer->setTouchState(xNorm, yNorm, isDown, pressure, radiusNorm);
+    }
+}

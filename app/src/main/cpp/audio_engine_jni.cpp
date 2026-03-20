@@ -55,6 +55,15 @@ Java_com_example_audioengine_AudioEngine_nativeVisualizerOnDrawFrame(JNIEnv *env
     if (engine) engine->getAudioVisualizer()->visualizerOnDrawFrame();
 }
 
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_audioengine_AudioEngine_nativeVisualizerSetTouch(JNIEnv *env, jobject thiz, jfloat xNorm, jfloat yNorm, jint isDownInt, jfloat pressure, jfloat radiusNorm, jlong nativeHandle) {
+    auto *engine = reinterpret_cast<AudioEngine *>(nativeHandle);
+    if (engine) {
+        engine->setVisualizerTouch(xNorm, yNorm, isDownInt != 0, pressure, radiusNorm);
+    }
+}
+
 
 extern "C"
 JNIEXPORT void JNICALL

@@ -278,7 +278,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }, modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16 / 9f)
+                        .aspectRatio(16f / 9)
                 )
             }
 

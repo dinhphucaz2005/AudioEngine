@@ -4,8 +4,15 @@
 namespace {
 
     constexpr size_t
-    kBars = 64;
+            kBars = 64;
     constexpr float kVisibleHeight = 4.0f / 3.0f; // Match 2/3 of viewport in NDC [-1, 1].
+    constexpr float kTouchAttackHz = 18.0f;
+    constexpr float kTouchReleaseHz = 6.0f;
+    constexpr float kShockwaveBaseStrength = 0.07f;
+    constexpr float kShockwavePressureStrength = 0.22f;
+    constexpr float kShockwaveSpeed = 1.35f;
+    constexpr float kShockwaveBandWidth = 0.20f;
+    constexpr float kShockwaveDecayHz = 1.7f;
 
     void hsvToRgb(float h, float s, float v, float &r, float &g, float &b) {
         const float hh = h - floorf(h);
@@ -50,7 +57,7 @@ namespace {
         }
     }
 
-    void appendQuad(std::vector <VisualizerVertex> &dst,
+    void appendQuad(std::vector<VisualizerVertex> &dst,
             float x0,
             float x1,
             float y0,
@@ -83,9 +90,29 @@ void AudioVisualizer::visualizerOnSurfaceCreated() {
     static constexpr const char *kVertexShaderSrc =
             "attribute vec2 aPosition;\n"
             "attribute vec4 aColor;\n"
+            "uniform vec2 uShockwaveCenter;\n"
+            "uniform vec3 uShockwaveParams;\n"
+            "uniform float uShockwaveScale;\n"
             "varying vec4 vColor;\n"
+            "vec2 applyShockwave(vec2 p) {\n"
+            "  float radius = uShockwaveParams.x;\n"
+            "  float energy = uShockwaveParams.y;\n"
+            "  float width = max(0.0001, uShockwaveParams.z);\n"
+            "  if (energy <= 0.00001) return p;\n"
+            "  vec2 d = p - uShockwaveCenter;\n"
+            "  float dist = max(0.0001, length(d));\n"
+            "  float ringDelta = dist - radius;\n"
+            "  float front = exp(-(ringDelta * ringDelta) / (2.0 * width * width));\n"
+            "  float tailDelta = ringDelta + width * 1.7;\n"
+            "  float tailWidth = width * 1.8;\n"
+            "  float tail = exp(-(tailDelta * tailDelta) / (2.0 * tailWidth * tailWidth));\n"
+            "  float pulse = front - 0.55 * tail;\n"
+            "  float push = pulse * energy * uShockwaveScale;\n"
+            "  return p + (d / dist) * push;\n"
+            "}\n"
             "void main() {\n"
-            "  gl_Position = vec4(aPosition, 0.0, 1.0);\n"
+            "  vec2 displaced = applyShockwave(aPosition);\n"
+            "  gl_Position = vec4(displaced, 0.0, 1.0);\n"
             "  vColor = aColor;\n"
             "}\n";
 
@@ -100,9 +127,29 @@ void AudioVisualizer::visualizerOnSurfaceCreated() {
             "attribute vec2 aPosition;\n"
             "attribute float aPointSize;\n"
             "attribute vec4 aColor;\n"
+            "uniform vec2 uShockwaveCenter;\n"
+            "uniform vec3 uShockwaveParams;\n"
+            "uniform float uShockwaveScale;\n"
             "varying vec4 vColor;\n"
+            "vec2 applyShockwave(vec2 p) {\n"
+            "  float radius = uShockwaveParams.x;\n"
+            "  float energy = uShockwaveParams.y;\n"
+            "  float width = max(0.0001, uShockwaveParams.z);\n"
+            "  if (energy <= 0.00001) return p;\n"
+            "  vec2 d = p - uShockwaveCenter;\n"
+            "  float dist = max(0.0001, length(d));\n"
+            "  float ringDelta = dist - radius;\n"
+            "  float front = exp(-(ringDelta * ringDelta) / (2.0 * width * width));\n"
+            "  float tailDelta = ringDelta + width * 1.7;\n"
+            "  float tailWidth = width * 1.8;\n"
+            "  float tail = exp(-(tailDelta * tailDelta) / (2.0 * tailWidth * tailWidth));\n"
+            "  float pulse = front - 0.55 * tail;\n"
+            "  float push = pulse * energy * uShockwaveScale;\n"
+            "  return p + (d / dist) * push;\n"
+            "}\n"
             "void main() {\n"
-            "  gl_Position = vec4(aPosition, 0.0, 1.0);\n"
+            "  vec2 displaced = applyShockwave(aPosition);\n"
+            "  gl_Position = vec4(displaced, 0.0, 1.0);\n"
             "  gl_PointSize = aPointSize;\n"
             "  vColor = aColor;\n"
             "}\n";
@@ -167,6 +214,12 @@ void AudioVisualizer::visualizerOnSurfaceCreated() {
     mCircleColorHandle = glGetAttribLocation(mCircleProgram, "aColor");
     mCircleRadiusHandle = glGetUniformLocation(mCircleProgram, "uRadius");
     mCirclePowerHandle = glGetUniformLocation(mCircleProgram, "uPower");
+    mShockwaveCenterHandle = glGetUniformLocation(mVisualizerProgram, "uShockwaveCenter");
+    mShockwaveParamsHandle = glGetUniformLocation(mVisualizerProgram, "uShockwaveParams");
+    mShockwaveScaleHandle = glGetUniformLocation(mVisualizerProgram, "uShockwaveScale");
+    mCircleShockwaveCenterHandle = glGetUniformLocation(mCircleProgram, "uShockwaveCenter");
+    mCircleShockwaveParamsHandle = glGetUniformLocation(mCircleProgram, "uShockwaveParams");
+    mCircleShockwaveScaleHandle = glGetUniformLocation(mCircleProgram, "uShockwaveScale");
 
     glGenBuffers(1, &mVisualizerVbo);
     glGenBuffers(1, &mCircleVbo);
@@ -187,7 +240,10 @@ void AudioVisualizer::visualizerOnDrawFrame() {
     if (mVisualizerProgram == 0 || mCircleProgram == 0 || mVisualizerVbo == 0 || mCircleVbo == 0 ||
             mPositionHandle < 0 || mColorHandle < 0 || mCirclePositionHandle < 0 ||
             mCircleSizeHandle < 0 || mCircleColorHandle < 0 || mCircleRadiusHandle < 0 ||
-            mCirclePowerHandle < 0 || mSurfaceWidth <= 0) {
+            mCirclePowerHandle < 0 || mShockwaveCenterHandle < 0 || mShockwaveParamsHandle < 0 ||
+            mShockwaveScaleHandle < 0 || mCircleShockwaveCenterHandle < 0 ||
+            mCircleShockwaveParamsHandle < 0 || mCircleShockwaveScaleHandle < 0 ||
+            mSurfaceWidth <= 0) {
         return;
     }
 
@@ -198,6 +254,27 @@ void AudioVisualizer::visualizerOnDrawFrame() {
         dt = std::clamp(static_cast<float>(elapsedNs) / 1'000'000'000.0f, 1.0f / 240.0f, 0.1f);
     }
     mLastRenderTime = now;
+
+    const float touchX = std::clamp(mTouchXNorm.load(std::memory_order_relaxed), 0.0f, 1.0f) * 2.0f - 1.0f;
+    const float touchY = 1.0f - std::clamp(mTouchYNorm.load(std::memory_order_relaxed), 0.0f, 1.0f) * 2.0f;
+    const float touchPressure = std::clamp(mTouchPressure.load(std::memory_order_relaxed), 0.0f, 1.0f);
+    const float touchRadius = std::clamp(mTouchRadiusNorm.load(std::memory_order_relaxed), 0.03f, 0.5f) * 1.8f;
+    const float touchTarget = mTouchDown.load(std::memory_order_relaxed) ? 1.0f : 0.0f;
+    const float responseHz = (touchTarget > mTouchEnvelope) ? kTouchAttackHz : kTouchReleaseHz;
+    const float response = 1.0f - expf(-responseHz * dt);
+    mTouchEnvelope += (touchTarget - mTouchEnvelope) * response;
+    const bool touchDown = mTouchDown.load(std::memory_order_relaxed);
+    const float touchStrength =
+            mTouchEnvelope * (kShockwaveBaseStrength + kShockwavePressureStrength * touchPressure);
+
+    if (touchDown && !mWasTouchDown) {
+        mShockwaveRadius = 0.0f;
+        mShockwaveEnergy = touchStrength;
+    }
+    mShockwaveRadius += kShockwaveSpeed * dt;
+    mShockwaveEnergy *= expf(-kShockwaveDecayHz * dt);
+    mWasTouchDown = touchDown;
+    const float shockwaveWidth = std::max(0.04f, touchRadius * kShockwaveBandWidth);
 
     const size_t fftBins = fft_analyze(dt);
     if (fftBins == 0) {
@@ -225,7 +302,11 @@ void AudioVisualizer::visualizerOnDrawFrame() {
         const float ySmooth = yBase + smooth * kVisibleHeight;
         const float ySmear = yBase + smear * kVisibleHeight;
 
-        appendQuad(mBarVertices, xCenter - barHalfWidth, xCenter + barHalfWidth, yBase, ySmooth, r, g, b, 1.0f);
+        float barX0 = xCenter - barHalfWidth;
+        float barX1 = xCenter + barHalfWidth;
+        float barY0 = yBase;
+        float barY1 = ySmooth;
+        appendQuad(mBarVertices, barX0, barX1, barY0, barY1, r, g, b, 1.0f);
 
         // Build a vertical trail from smooth -> smear using circles that shrink and fade.
         const float dy = ySmear - ySmooth;
@@ -255,6 +336,9 @@ void AudioVisualizer::visualizerOnDrawFrame() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glUseProgram(mVisualizerProgram);
+    glUniform2f(mShockwaveCenterHandle, touchX, touchY);
+    glUniform3f(mShockwaveParamsHandle, mShockwaveRadius, mShockwaveEnergy, shockwaveWidth);
+    glUniform1f(mShockwaveScaleHandle, 1.35f);
     glBindBuffer(GL_ARRAY_BUFFER, mVisualizerVbo);
 
     const auto barStride = static_cast<GLsizei>(sizeof(VisualizerVertex));
@@ -279,6 +363,9 @@ void AudioVisualizer::visualizerOnDrawFrame() {
     glDisableVertexAttribArray(static_cast<GLuint>(mColorHandle));
 
     glUseProgram(mCircleProgram);
+    glUniform2f(mCircleShockwaveCenterHandle, touchX, touchY);
+    glUniform3f(mCircleShockwaveParamsHandle, mShockwaveRadius, mShockwaveEnergy, shockwaveWidth);
+    glUniform1f(mCircleShockwaveScaleHandle, 1.55f);
     glBindBuffer(GL_ARRAY_BUFFER, mCircleVbo);
 
     const auto circleStride = static_cast<GLsizei>(sizeof(CircleVertex));
@@ -327,7 +414,6 @@ void AudioVisualizer::visualizerOnDrawFrame() {
 }
 
 
-
 size_t AudioVisualizer::fft_analyze(float dt) {
     if (visualizerPlain.sample_rate == 0) {
         return 0;
@@ -355,7 +441,7 @@ size_t AudioVisualizer::fft_analyze(float dt) {
         float f1 = ceilf(f * step);
         float a = 0.0f;
         for (auto q = (size_t) f; q < cutoff_bin && q < (size_t) f1;
-        ++q) {
+             ++q) {
             float b = amp(visualizerPlain.out_raw[q]);
             if (b > a) a = b;
         }
@@ -447,11 +533,25 @@ void AudioVisualizer::releaseVisualizerGl() {
     mCircleColorHandle = -1;
     mCircleRadiusHandle = -1;
     mCirclePowerHandle = -1;
+    mShockwaveCenterHandle = -1;
+    mShockwaveParamsHandle = -1;
+    mShockwaveScaleHandle = -1;
+    mCircleShockwaveCenterHandle = -1;
+    mCircleShockwaveParamsHandle = -1;
+    mCircleShockwaveScaleHandle = -1;
 }
 
 void AudioVisualizer::pushAudioFrame(float frame) {
     memmove(visualizerPlain.in_raw, visualizerPlain.in_raw + 1, (FFT_SIZE - 1) * sizeof(visualizerPlain.in_raw[0]));
     visualizerPlain.in_raw[FFT_SIZE - 1] = frame;
+}
+
+void AudioVisualizer::setTouchState(float xNorm, float yNorm, bool isDown, float pressure, float radiusNorm) {
+    mTouchXNorm.store(std::clamp(xNorm, 0.0f, 1.0f), std::memory_order_relaxed);
+    mTouchYNorm.store(std::clamp(yNorm, 0.0f, 1.0f), std::memory_order_relaxed);
+    mTouchPressure.store(std::clamp(pressure, 0.0f, 1.0f), std::memory_order_relaxed);
+    mTouchRadiusNorm.store(std::clamp(radiusNorm, 0.03f, 0.5f), std::memory_order_relaxed);
+    mTouchDown.store(isDown, std::memory_order_relaxed);
 }
 
 void AudioVisualizer::clean() {
@@ -461,11 +561,12 @@ void AudioVisualizer::clean() {
     memset(visualizerPlain.out_log, 0, sizeof(visualizerPlain.out_log));
     memset(visualizerPlain.out_smooth, 0, sizeof(visualizerPlain.out_smooth));
     memset(visualizerPlain.out_smear, 0, sizeof(visualizerPlain.out_smear));
+    mTouchEnvelope = 0.0f;
+    mShockwaveRadius = 0.0f;
+    mShockwaveEnergy = 0.0f;
+    mWasTouchDown = false;
 }
 
-
-void AudioVisualizer::setSampleRate(size_t
-sample_rate) {
-visualizerPlain.
-sample_rate = sample_rate;
+void AudioVisualizer::setSampleRate(size_t sample_rate) {
+    visualizerPlain.sample_rate = sample_rate;
 }

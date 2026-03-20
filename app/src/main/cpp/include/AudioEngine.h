@@ -35,6 +35,8 @@ public:
 
     void setAudioFilter(FilterType type);
 
+    void setVisualizerTouch(float xNorm, float yNorm, bool isDown, float pressure, float radiusNorm);
+
 private:
 
     void decodeLoop();
