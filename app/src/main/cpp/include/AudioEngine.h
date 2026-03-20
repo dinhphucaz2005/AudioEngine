@@ -10,6 +10,7 @@
 #include "AudioDecoder.h"
 #include "LockfreeBuffer.h"
 #include "AudioVisualizer.h"
+#include "AudioFilter.h"
 
 
 class AudioEngine : public oboe::AudioStreamDataCallback, public oboe::AudioStreamErrorCallback {
@@ -24,15 +25,15 @@ public:
 
     void pause();
 
-    void setFilterEnabled(bool enabled);
-
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override;
 
     bool onError(oboe::AudioStream *audioStream, oboe::Result error) override;
 
-    AudioVisualizer* getAudioVisualizer() {
-        return &audioVisualizer;
+    AudioVisualizer *getAudioVisualizer() {
+        return mAudioVisualizer;
     }
+
+    void setAudioFilter(FilterType type);
 
 private:
 
@@ -47,16 +48,11 @@ private:
     int mChannels{};
 
     std::atomic<bool> mIsPlaying{false};
-    std::atomic<bool> mFilterEnabled{false};
-
-    // Filter state
-    float mPreviousSampleL = 0.0f;
-    float mPreviousSampleR = 0.0f;
 
     std::unique_ptr<LockfreeBuffer<float>> mPlaybackBuffer;
     std::thread mDecodeThread;
     std::atomic<bool> mIsDecoding{false};
     std::mutex mStateMutex;
-
-    AudioVisualizer audioVisualizer;
+    std::shared_ptr<AudioFilter> mAudioFilter;
+    AudioVisualizer *mAudioVisualizer;
 };

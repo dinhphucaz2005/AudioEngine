@@ -31,10 +31,6 @@ class AudioEngine {
 
     private external fun nativePlay(nativeHandle: Long = this.nativeHandle)
     private external fun nativePause(nativeHandle: Long = this.nativeHandle)
-    private external fun nativeSetFilterEnabled(
-        enabled: Boolean,
-        nativeHandle: Long = this.nativeHandle,
-    )
 
     private external fun nativeVisualizerOnSurfaceCreated(nativeHandle: Long = this.nativeHandle)
     private external fun nativeVisualizerOnSurfaceChanged(
@@ -44,6 +40,11 @@ class AudioEngine {
     )
 
     private external fun nativeVisualizerOnDrawFrame(nativeHandle: Long = this.nativeHandle)
+
+    private external fun nativeSetFilterType(
+        filterType: Int,
+        nativeHandle: Long = this.nativeHandle,
+    )
 
     fun loadAudioSource(
         contentResolver: ContentResolver,
@@ -99,10 +100,6 @@ class AudioEngine {
         return false
     }
 
-    fun setFilterEnabled(enabled: Boolean) {
-        safeNativeCall { nativeSetFilterEnabled(enabled) }
-    }
-
     private inline fun <T> safeNativeCall(action: () -> T): T? {
         return try {
             if (nativeHandle == 0L) {
@@ -154,5 +151,30 @@ class AudioEngine {
 
     fun visualizerOnDrawFrame() {
         safeNativeCall { nativeVisualizerOnDrawFrame() }
+    }
+
+    enum class FilterType(val value: Int) {
+        NONE(0),
+        LOW_PASS(1),
+        HIGH_PASS(2),
+        ECHO(3),
+        REVERB(4),
+        PAN(5),
+    }
+
+    private var currentFilterType: FilterType = FilterType.NONE
+
+    fun setFilterType(filterType: FilterType) {
+        if (currentFilterType == filterType) {
+            Log.d(
+                "AudioEngine",
+                "Filter type is already set to ${filterType.name}. No change needed."
+            )
+            return
+        }
+        val result = safeNativeCall { nativeSetFilterType(filterType.value) }
+        if (result != null) {
+            currentFilterType = filterType
+        }
     }
 }

@@ -21,22 +21,32 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,7 +73,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var audioEngine: AudioEngine
     private lateinit var thumbnailRepository: ThumbnailRepository
-    private var isFilterEnabled by mutableStateOf(false)
+    private var selectedFilterType by mutableStateOf(AudioEngine.FilterType.NONE)
     private var audioEngineIsReady by mutableStateOf(false)
     private var hasAudioPermission by mutableStateOf(false)
     private var songs by mutableStateOf<List<SongItem>>(emptyList())
@@ -86,22 +96,26 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                AudioEngineScreen(
-                    audioEngine = audioEngine,
-                    isFilterEnabled = isFilterEnabled,
-                    hasAudioPermission = hasAudioPermission,
-                    songs = songs,
-                    selectedSongId = selectedSongId,
-                    onFilterChanged = { enabled ->
-                        isFilterEnabled = enabled
-                        audioEngine.setFilterEnabled(enabled)
-                    },
-                    onRequestPermission = { checkPermissions() },
-                    onSongSelected = { song ->
-                        selectedSongId = song.id
-                        loadAudioFromUri(song.uri)
-                    },
-                )
+                Scaffold { paddingValues ->
+                    AudioEngineScreen(
+                        modifier = Modifier
+                            .padding(paddingValues),
+                        audioEngine = audioEngine,
+                        selectedFilterType = selectedFilterType,
+                        hasAudioPermission = hasAudioPermission,
+                        songs = songs,
+                        selectedSongId = selectedSongId,
+                        onFilterTypeChanged = { filterType ->
+                            selectedFilterType = filterType
+                            audioEngine.setFilterType(filterType)
+                        },
+                        onRequestPermission = { checkPermissions() },
+                        onSongSelected = { song ->
+                            selectedSongId = song.id
+                            loadAudioFromUri(song.uri)
+                        },
+                    )
+                }
             }
         }
 
@@ -157,7 +171,8 @@ class MainActivity : ComponentActivity() {
             val titleIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             val artistIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val albumIdIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-            val dateModifiedIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            val dateModifiedIndex =
+                cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idIndex)
@@ -208,28 +223,26 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun AudioEngineScreen(
+        modifier: Modifier = Modifier,
         audioEngine: AudioEngine,
-        isFilterEnabled: Boolean,
+        selectedFilterType: AudioEngine.FilterType,
         hasAudioPermission: Boolean,
         songs: List<SongItem>,
         selectedSongId: Long?,
-        onFilterChanged: (Boolean) -> Unit,
+        onFilterTypeChanged: (AudioEngine.FilterType) -> Unit,
         onRequestPermission: () -> Unit,
         onSongSelected: (SongItem) -> Unit,
     ) {
         Column(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(text = stringResource(R.string.apply_filter))
-                Switch(checked = isFilterEnabled, onCheckedChange = onFilterChanged)
-            }
+            FilterTypeDropdown(
+                selectedFilterType = selectedFilterType,
+                onFilterTypeChanged = onFilterTypeChanged,
+            )
 
             if (audioEngineIsReady) {
                 AndroidView(
@@ -274,6 +287,64 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    private fun FilterTypeDropdown(
+        selectedFilterType: AudioEngine.FilterType,
+        onFilterTypeChanged: (AudioEngine.FilterType) -> Unit,
+    ) {
+        var expanded by remember { mutableStateOf(false) }
+        fun onExpandedChange(isExpanded: Boolean) {
+            expanded = isExpanded
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { onExpandedChange(it) },
+        ) {
+            OutlinedTextField(
+                modifier = Modifier
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
+                value = filterTypeLabel(selectedFilterType),
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(text = stringResource(R.string.apply_filter)) },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                AudioEngine.FilterType.entries.forEach { filterType ->
+                    DropdownMenuItem(
+                        text = { Text(text = filterTypeLabel(filterType)) },
+                        onClick = {
+                            onFilterTypeChanged(filterType)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun filterTypeLabel(filterType: AudioEngine.FilterType): String {
+        return when (filterType) {
+            AudioEngine.FilterType.NONE -> stringResource(R.string.filter_none)
+            AudioEngine.FilterType.LOW_PASS -> stringResource(R.string.filter_low_pass)
+            AudioEngine.FilterType.HIGH_PASS -> stringResource(R.string.filter_high_pass)
+            AudioEngine.FilterType.ECHO -> stringResource(R.string.filter_echo)
+            AudioEngine.FilterType.REVERB -> stringResource(R.string.filter_reverb)
+            AudioEngine.FilterType.PAN -> stringResource(R.string.filter_pan)
+        }
+    }
+
     @Composable
     private fun SongRow(
         song: SongItem,
@@ -287,7 +358,11 @@ class MainActivity : ComponentActivity() {
             albumId = song.albumId,
             dateModified = song.dateModified,
         )
-        val thumbnail by produceState<Bitmap?>(initialValue = null, key1 = song.id, key2 = song.dateModified) {
+        val thumbnail by produceState<Bitmap?>(
+            initialValue = null,
+            key1 = song.id,
+            key2 = song.dateModified
+        ) {
             value = thumbnailRepository.load(thumbRequest)
         }
         val isSelected = selectedSongId == song.id

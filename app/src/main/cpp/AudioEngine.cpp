@@ -6,8 +6,14 @@
 #include <cstring>
 #include "Util.h"
 
+template<typename T>
+std::shared_ptr<AudioFilter> makeFilter(T *ptr) {
+    return std::shared_ptr<AudioFilter>(ptr);
+}
+
 AudioEngine::AudioEngine() {
     mDecoder = new AudioDecoder();
+    mAudioVisualizer = new AudioVisualizer();
 }
 
 AudioEngine::~AudioEngine() {
@@ -19,6 +25,8 @@ AudioEngine::~AudioEngine() {
     stopWorkerThreads();
 
     delete mDecoder;
+    delete mAudioVisualizer;
+    std::atomic_store(&mAudioFilter, std::shared_ptr<AudioFilter>(nullptr));
 }
 
 void AudioEngine::stopWorkerThreads() {
@@ -48,8 +56,6 @@ bool AudioEngine::setAudioSource(int fd, int64_t offset, int64_t length) {
     {
         std::lock_guard<std::mutex> lock(mStateMutex);
         mPlaybackBuffer = std::make_unique<LockfreeBuffer<float>>(mSampleRate * mChannels);
-        mPreviousSampleL = 0.0f;
-        mPreviousSampleR = 0.0f;
     }
 
     LOGI("Audio stream ready to decode, SR: %d, Ch: %d", mSampleRate, mChannels);
@@ -65,7 +71,7 @@ bool AudioEngine::setAudioSource(int fd, int64_t offset, int64_t length) {
             ->setErrorCallback(this);
 
     const oboe::Result result = builder.openStream(&mStream);
-    audioVisualizer.setSampleRate(mSampleRate);
+    mAudioVisualizer->setSampleRate(mSampleRate);
     if (result != oboe::Result::OK) {
         LOGE("Failed to open stream: %s", oboe::convertToText(result));
         return false;
@@ -121,11 +127,6 @@ void AudioEngine::pause() {
     }
 }
 
-void AudioEngine::setFilterEnabled(bool enabled) {
-    mFilterEnabled.store(enabled, std::memory_order_release);
-}
-
-
 oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) {
     (void) audioStream;
     auto *output = static_cast<float *>(audioData);
@@ -140,32 +141,17 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream *audioStrea
         std::memset(output + samplesRead, 0, sizeof(float) * (static_cast<size_t>(samplesNeeded) - samplesRead));
     }
 
-    const bool filterEnabled = mFilterEnabled.load(std::memory_order_acquire);
-    for (int32_t i = 0; i < samplesNeeded; ++i) {
-        float sample = output[i];
-        if (filterEnabled) {
-            if (mChannels == 2) {
-                if ((i & 1) == 0) {
-                    sample = mPreviousSampleL + 0.05f * (sample - mPreviousSampleL);
-                    mPreviousSampleL = sample;
-                } else {
-                    sample = mPreviousSampleR + 0.05f * (sample - mPreviousSampleR);
-                    mPreviousSampleR = sample;
-                }
-            } else {
-                sample = mPreviousSampleL + 0.05f * (sample - mPreviousSampleL);
-                mPreviousSampleL = sample;
-            }
-            output[i] = sample;
-        }
+    auto filter = std::atomic_load(&mAudioFilter);
+    if (filter) {
+        filter->process(output, numFrames, mChannels);
     }
     if (mChannels == 1) {
         for (int32_t i = 0; i < numFrames; ++i) {
-            audioVisualizer.pushAudioFrame(output[i]);
+            mAudioVisualizer->pushAudioFrame(output[i]);
         }
     } else {
         for (int32_t i = 0; i < samplesNeeded; i += 2) {
-            audioVisualizer.pushAudioFrame(output[i]);
+            mAudioVisualizer->pushAudioFrame(output[i]);
         }
     }
     return oboe::DataCallbackResult::Continue;
@@ -180,4 +166,32 @@ bool AudioEngine::onError(oboe::AudioStream *audioStream, oboe::Result error) {
     }
     mIsPlaying.store(false, std::memory_order_release);
     return true;
+}
+
+void AudioEngine::setAudioFilter(FilterType type) {
+    std::shared_ptr<AudioFilter> newFilter;
+
+    switch (type) {
+        case FilterType::None:
+            newFilter = nullptr;
+            break;
+        case FilterType::LowPass:
+            newFilter = makeFilter(LowPassFilter::createDefault());
+            break;
+        case FilterType::HighPass:
+            newFilter = makeFilter(HighPassFilter::createDefault());
+            break;
+        case FilterType::Echo:
+            newFilter = makeFilter(EchoFilter::createDefault(mSampleRate));
+            break;
+        case FilterType::Reverb:
+            newFilter = makeFilter(ReverbFilter::createDefault(mSampleRate));
+            break;
+
+        case FilterType::Pan:
+            newFilter = makeFilter(PanFilter::createDefault());
+            break;
+    }
+
+    std::atomic_store(&mAudioFilter, newFilter);
 }

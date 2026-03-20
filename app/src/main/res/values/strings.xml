@@ -4,6 +4,12 @@
     <string name="play">Play</string>
     <string name="pause">Pause</string>
     <string name="apply_filter">Apply Filter</string>
+    <string name="filter_none">None</string>
+    <string name="filter_low_pass">Low-pass</string>
+    <string name="filter_high_pass">High-pass</string>
+    <string name="filter_echo">Echo</string>
+    <string name="filter_reverb">Reverb</string>
+    <string name="filter_pan">Pan</string>
     <string name="visualizer_label">Visualizer Data (FFT Peak / RMS):</string>
     <string name="playlist">Playlist</string>
     <string name="audio_permission_required">Allow audio permission to load songs from device.</string>

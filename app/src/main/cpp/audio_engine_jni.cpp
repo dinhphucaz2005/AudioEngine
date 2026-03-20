@@ -38,12 +38,6 @@ Java_com_example_audioengine_AudioEngine_nativePause(JNIEnv *env, jobject thiz, 
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_audioengine_AudioEngine_nativeSetFilterEnabled(JNIEnv *env, jobject thiz, jboolean enabled, jlong native_handle) {
-    auto *engine = reinterpret_cast<AudioEngine *>(native_handle);
-    if (engine) engine->setFilterEnabled(enabled);
-}
-
-extern "C" JNIEXPORT void JNICALL
 Java_com_example_audioengine_AudioEngine_nativeVisualizerOnSurfaceCreated(JNIEnv *env, jobject thiz, jlong native_handle) {
     auto *engine = reinterpret_cast<AudioEngine *>(native_handle);
     if (engine) engine->getAudioVisualizer()->visualizerOnSurfaceCreated();
@@ -61,3 +55,10 @@ Java_com_example_audioengine_AudioEngine_nativeVisualizerOnDrawFrame(JNIEnv *env
     if (engine) engine->getAudioVisualizer()->visualizerOnDrawFrame();
 }
 
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_audioengine_AudioEngine_nativeSetFilterType(JNIEnv *env, jobject thiz, jint filter_type, jlong native_handle) {
+    auto *engine = reinterpret_cast<AudioEngine *>(native_handle);
+    if (engine) engine->setAudioFilter(static_cast<FilterType>(filter_type));
+}
